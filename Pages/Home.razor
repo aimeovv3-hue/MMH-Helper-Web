@@ -1,0 +1,135 @@
+@page "/"
+@using System.IO
+@using MMHWeb.Services
+@inject IJSRuntime JSRuntime
+@inject AtmosProcessor Processor
+
+<div class="container mt-4" style="max-width: 700px; background: #1e1e1e; color: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
+    <h3 style="color: #00d2ff; border-bottom: 1px solid #333; padding-bottom: 10px;">MMH Atmos Helper - Web Edition</h3>
+    
+    <div class="my-3 p-4 text-center" style="border: 2px dashed #444; border-radius: 6px; background: #252525;">
+        <label style="cursor: pointer; display: block;">
+            <InputFile OnChange="OnFileSelected" style="display: none;" accept=".m4a,.eac3,.mp4,.mka,.truehd" />
+            <span style="font-size: 1.2em; color: #aaa;">📁 @fileName</span>
+            <p class="text-muted mb-0 mt-1" style="font-size: 0.85em;">Toca aquí para seleccionar tu archivo Dolby Atmos</p>
+        </label>
+    </div>
+
+    <div class="row g-3 my-2">
+        <div class="col-md-6">
+            <label class="form-label">Layout de Salida:</label>
+            <select class="form-select bg-dark text-light border-secondary" @bind="targetLayout">
+                <option value="9.1.6">9.1.6 Interleaved WAV (16 Canales)</option>
+                <option value="7.1.4">7.1.4 Interleaved WAV (12 Canales)</option>
+                <option value="5.1.2">5.1.2 Interleaved WAV (8 Canales)</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Frecuencia:</label>
+            <select class="form-select bg-dark text-light border-secondary" @bind="sampleRate">
+                <option value="48000">48 kHz</option>
+                <option value="96000">96 kHz</option>
+            </select>
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Profundidad:</label>
+            <select class="form-select bg-dark text-light border-secondary" @bind="bitDepth">
+                <option value="24">24-Bit</option>
+                <option value="32">32-Bit Float</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="my-3 p-3" style="background: #2a2a2a; border-radius: 5px;">
+        <span class="d-block mb-2 text-info" style="font-weight: bold;">Funciones Secundarias DSP:</span>
+        <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="drCheck" @bind="calcDR">
+            <label class="form-check-label" for="drCheck">Calcular Dynamic Range (DR Meter)</label>
+        </div>
+        <div class="form-check form-switch mt-2">
+            <input class="form-check-input" type="checkbox" id="normCheck" @bind="applyNorm">
+            <label class="form-check-label" for="normCheck">Aplicar Normalización de Pico (-0.1 dBFS)</label>
+        </div>
+    </div>
+
+    @if (isProcessing)
+    {
+        <div class="my-3">
+            <div class="progress" style="height: 20px; background: #333;">
+                <div class="progress-bar progress-bar-striped progress-bar-animated bg-info" role="progressbar" style="width: @(progress)%;">@progress%</div>
+            </div>
+            <small class="text-info d-block mt-1 text-center">@statusMessage</small>
+        </div>
+    }
+
+    @if (processingComplete)
+    {
+        <div class="alert alert-dark border-success mt-3" style="background: #1a2e1a;">
+            <h6 class="text-success">✔ Conversión Finalizada con Éxito</h6>
+            <p class="mb-1" style="font-size: 0.9em;"><strong>Formato:</strong> @targetLayout (@bitDepth-bit / @(sampleRate/1000)kHz)</p>
+            @if (calcDR)
+            {
+                <p class="mb-1" style="font-size: 0.9em;"><strong>Medición DR:</strong> <span class="badge bg-secondary">@drResult</span></p>
+            }
+            <hr style="border-color: #333;">
+            <button class="btn btn-success w-100 py-2" style="font-weight: bold; font-size: 1.1em;" @onclick="DownloadWav">
+                ⬇ Descargar Archivo WAV Interleaved
+            </button>
+        </div>
+    }
+    else
+    {
+        <button class="btn btn-primary w-100 py-2 mt-3" style="font-weight: bold; background: #0078d4;" disabled="@(!fileSelected || isProcessing)" @onclick="StartProcessing">
+            @(isProcessing ? "Procesando Audio..." : "Iniciar Decodificación Atmos")
+        </button>
+    }
+</div>
+
+@code {
+    private string fileName = "Seleccionar archivo Atmos...";
+    private IBrowserFile selectedFile;
+    private bool fileSelected = false;
+    private bool isProcessing = false;
+    private bool processingComplete = false;
+    private int progress = 0;
+    private string statusMessage = "";
+    private string targetLayout = "9.1.6";
+    private int sampleRate = 48000;
+    private int bitDepth = 24;
+    private bool calcDR = true;
+    private bool applyNorm = false;
+    private Stream outputWavStream;
+    private string drResult = "";
+
+    private void OnFileSelected(InputFileChangeEventArgs e)
+    {
+        selectedFile = e.File;
+        fileName = selectedFile.Name;
+        fileSelected = true;
+        processingComplete = false;
+    }
+
+    private async Task StartProcessing()
+    {
+        isProcessing = true;
+        processingComplete = false;
+        progress = 0;
+        using var stream = selectedFile.OpenReadStream(maxAllowedSize: 1024 * 1024 * 500);
+        var result = await Processor.ProcessAudioAsync(stream, sampleRate, bitDepth, calcDR, applyNorm, (pct, msg) => {
+            progress = pct;
+            statusMessage = msg;
+            StateHasChanged();
+        });
+        outputWavStream = result.WavStream;
+        drResult = result.DynamicRangeReport;
+        isProcessing = false;
+        processingComplete = true;
+    }
+
+    private async Task DownloadWav()
+    {
+        using var streamRef = new DotNetStreamReference(outputWavStream);
+        string outName = Path.GetFileNameWithoutExtension(fileName) + $"_{targetLayout}_Interleaved.wav";
+        await JSRuntime.InvokeVoidAsync("downloadAudioFile", outName, streamRef);
+    }
+}
