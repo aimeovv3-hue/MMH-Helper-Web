@@ -1,8 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk.BlazorWebAssembly">
   <PropertyGroup>
     <TargetFramework>net9.0</TargetFramework>
-    <Nullable>enable</Nullable>
+    <Nullable>disable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <CompressionEnabled>false</CompressionEnabled>
+    <PublishCompression>false</PublishCompression>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly" Version="9.0.0" />
