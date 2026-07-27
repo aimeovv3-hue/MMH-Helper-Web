@@ -27,6 +27,9 @@ jobs:
       - name: Copiar index.html como 404.html
         run: cp release/wwwroot/index.html release/wwwroot/404.html
 
+      - name: Forzar archivo .nojekyll para evitar bloqueo de _framework
+        run: touch release/wwwroot/.nojekyll
+
       - name: Subir artefacto
         uses: actions/upload-pages-artifact@v3
         with:
