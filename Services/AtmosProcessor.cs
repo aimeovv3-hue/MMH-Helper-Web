@@ -58,7 +58,7 @@ namespace MMHWeb.Services
                 writer.Write(System.Text.Encoding.ASCII.GetBytes("WAVE"));
                 writer.Write(System.Text.Encoding.ASCII.GetBytes("fmt "));
                 writer.Write(40); 
-                writer.Write((short)0xFFFE); 
+                writer.Write((ushort)0xFFFE); // <-- Aquí está la corrección (ushort en lugar de short)
                 writer.Write((short)channels);
                 writer.Write(sampleRate);
                 writer.Write(byteRate);
@@ -76,8 +76,8 @@ namespace MMHWeb.Services
 
     public class AtmosResult
     {
-        public Stream WavStream { get; set; }
-        public string DynamicRangeReport { get; set; }
+        public Stream WavStream { get; set; } = new MemoryStream();
+        public string DynamicRangeReport { get; set; } = "";
         public double PeakLevel { get; set; }
     }
 }
